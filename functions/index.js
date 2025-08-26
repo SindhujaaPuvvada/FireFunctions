@@ -79,3 +79,80 @@ exports.onUserDelete = functions.auth.user().onDelete(async (user)=>{
     return Promise.resolve();
 
 });
+
+const recursiveSearch = async (db, docref) => {
+   const funUpdate = async (docref) => {
+
+       const subColls = await docref.listCollections();
+       for(const subColl of subColls){
+          console.log(subColl.path);
+          if((subColl.path).includes('Milk')){
+            const snapshot = await subColl.get();
+            if(snapshot.empty){
+                return;
+            }
+            for(const doc of snapshot.docs){
+                const docPath = `${subColl.path}/${doc.id}`;
+                console.log(docPath);
+                const subDocRef = db.doc(docPath);
+                const docSnapshot = await subDocRef.get();
+                if(docSnapshot.exists){
+                    const docData = docSnapshot.data();
+                    if(docData['rfid'] !== undefined){
+                        console.log("inside rfid");
+                        rfidVal = docData['rfid'];
+                        morVal = docData['morning'];
+                        eveVal = docData['evening'];
+                        dateVal = docData['dateOfMilk'];
+
+                        if((subColl.path).endsWith('Store')){
+                            await subDocRef.delete();
+                            await subDocRef.set({
+                                id: rfidVal.toString(),
+                                morning: morVal,
+                                evening: eveVal,
+                                dateOfMilk: dateVal
+                            });
+                        }
+                    }
+                }
+                await funUpdate(subDocRef);
+            }
+          }
+       }
+   };
+   await funUpdate(docref);
+};
+
+exports.updateAllUsersMilkStoreField = functions.https.onRequest(async (req, res) => {
+    try {
+        const db = await admin.firestore();
+        const usersCollRef = await db.collection('User');
+        //console.log(typeof usersCollRef);
+        const snapshot = await usersCollRef.get();
+        //console.log(typeof snapshot.docs);
+
+        if(snapshot.empty){
+            console.log("No data to update!");
+        }
+        else{
+            for(const doc of snapshot.docs){
+                const docPath = `${usersCollRef.path}/${doc.id}`;
+                console.log(docPath);
+                const subDocRef = db.doc(docPath);
+                console.log(`Updating field for the user id ${doc.id}`);
+                await recursiveSearch(db, subDocRef);
+            }
+        }
+
+        res.send(Promise.resolve());
+
+    } catch (error) {
+        if (error.code === 7 || error.message.includes('permission denied')) {
+            // Permission denied error codes/messages
+            res.status(403).send('Access denied to Firestore.');
+        } else {
+            res.status(500).send('Error accessing Firestore: ' + error.message);
+        }
+    }
+});
