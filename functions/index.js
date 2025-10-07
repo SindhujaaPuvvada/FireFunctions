@@ -80,7 +80,7 @@ exports.onUserDelete = functions.auth.user().onDelete(async (user)=>{
 
 });
 
-const recursiveSearch = async (db, docref) => {
+/*const recursiveSearch = async (db, docref) => {
    const funUpdate = async (docref) => {
 
        const subColls = await docref.listCollections();
@@ -155,4 +155,61 @@ exports.updateAllUsersMilkStoreField = functions.https.onRequest(async (req, res
             res.status(500).send('Error accessing Firestore: ' + error.message);
         }
     }
+});*/
+
+exports.sendMilkEntryNotifications = functions.https.onRequest(async (req, res) => {
+    let userTokens = [];
+    try {
+        const db = await admin.firestore();
+        const usersCollRef = await db.collection('User');
+        //console.log(typeof usersCollRef);
+        const snapshot = await usersCollRef.get();
+        //console.log(typeof snapshot.docs);
+
+        if(snapshot.empty){
+            console.log("No users to send Notifications!");
+        }
+        else{
+            for(const doc of snapshot.docs){
+                const docPath = `${usersCollRef.path}/${doc.id}`;
+                //console.log(docPath);
+                const subDocRef = db.doc(docPath);
+                console.log(`Adding token of the user id ${doc.id}`);
+
+                const docSnapshot = await subDocRef.get();
+                //console.log('I am here!!!!!!!');
+                if(docSnapshot.exists){
+                    const docData = docSnapshot.data();
+                    if(docData['fcmToken'] !== undefined){
+                        userTokens.push(docData['fcmToken']);
+                    }
+                }
+            }
+        }
+
+    } catch (error) {
+        if (error.code === 7 || error.message.includes('permission denied')) {
+            // Permission denied error codes/messages
+            res.status(403).send('Access denied to Firestore.');
+        } else {
+            res.status(500).send('Error accessing Firestore: ' + error.message);
+        }
+    }
+
+    const message = {
+        notification: {
+            title: 'Milk entry reminder!',
+            body: 'It\'s time to make milk entry for today!!'
+         },
+        tokens: userTokens, // Send to multiple tokens
+    };
+
+    try {
+        const response = await admin.messaging().sendEachForMulticast(message);
+        console.log('Successfully sent message:', response);
+    } catch (error) {
+        console.error('Error sending message:', error);
+    }
+
+    res.status(200).send('Successfully sent message!');
 });
