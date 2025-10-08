@@ -180,7 +180,7 @@ exports.sendMilkEntryNotifications = functions.https.onRequest(async (req, res) 
                 //console.log('I am here!!!!!!!');
                 if(docSnapshot.exists){
                     const docData = docSnapshot.data();
-                    if(docData['fcmToken'] !== undefined){
+                    if(docData['fcmToken'] !== undefined && docData['fcmToken'] != '' && docData['fcmToken'] != null){
                         userTokens.push(docData['fcmToken']);
                     }
                 }
@@ -196,20 +196,27 @@ exports.sendMilkEntryNotifications = functions.https.onRequest(async (req, res) 
         }
     }
 
-    const message = {
-        notification: {
-            title: 'Milk entry reminder!',
-            body: 'It\'s time to make milk entry for today!!'
-         },
-        tokens: userTokens, // Send to multiple tokens
-    };
+    //console.log(userTokens);
 
-    try {
-        const response = await admin.messaging().sendEachForMulticast(message);
-        console.log('Successfully sent message:', response);
-    } catch (error) {
-        console.error('Error sending message:', error);
+    if(userTokens.length != 0){
+        const message = {
+            notification: {
+                title: 'Milk entry reminder!',
+                body: 'It\'s time to make milk entry for today!!'
+            },
+            tokens: userTokens, // Send to multiple tokens
+        };
+
+        try {
+            const response = await admin.messaging().sendEachForMulticast(message);
+            console.log('Successfully sent message:', response);
+        } catch (error) {
+            console.error('Error sending message:', error);
+        }
+        res.status(200).send('Successfully sent message!');
+    }
+    else{
+        res.status(200).send('No tokens to send Notifications!');
     }
 
-    res.status(200).send('Successfully sent message!');
 });
