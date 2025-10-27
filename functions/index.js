@@ -4,7 +4,7 @@ const admin = require('firebase-admin');
 
 admin.initializeApp();
 
-const recursiveDelete = async (db, path) => {
+/*const recursiveDelete = async (db, path) => {
 
     const funDelete = async (docref) => {  
 
@@ -43,7 +43,7 @@ const recursiveDelete = async (db, path) => {
     const ref = db.doc(path);
     await funDelete(ref);
 
-};
+};*/
 
 exports.deleteFarmData = https.onCall(async (request)=>{
 
@@ -51,9 +51,12 @@ exports.deleteFarmData = https.onCall(async (request)=>{
 
     console.log(`Deleting Farm data for UID ${uid}`);
 
-    const ref = admin.firestore().doc(`User/${uid}`);
+    const db = admin.firestore();
+    const ref = db.doc(`User/${uid}`);
 
     const subColls = await ref.listCollections();
+
+    promiseArray = [];
 
     for(const subcoll of subColls){
         const snapshot = await subcoll.get();
@@ -61,11 +64,13 @@ exports.deleteFarmData = https.onCall(async (request)=>{
             for(const doc of snapshot.docs){
                 const docPath = `${subcoll.path}/${doc.id}`;
                 console.log(docPath);
-                await recursiveDelete(admin.firestore(), docPath);
+                const docRef = db.doc(docPath);
+                promiseArray.push(new Promise(resolve => db.recursiveDelete(docRef)));
             }
         }
     }
 
+    const results = await Promise.allSettled(promiseArray);
     return Promise.resolve();
 });
 
@@ -74,7 +79,13 @@ exports.onUserDelete = functions.auth.user().onDelete(async (user)=>{
 
     console.log(`Deleting data for the ${user.phoneNumber}`);
 
-    await recursiveDelete(admin.firestore(), `User/${user.uid}`);
+    const db = admin.firestore();
+
+    const ref = db.doc(`User/${user.uid}`);
+
+     await db.recursiveDelete(ref);
+
+    //await recursiveDelete(admin.firestore(), `User/${user.uid}`);
 
     return Promise.resolve();
 
